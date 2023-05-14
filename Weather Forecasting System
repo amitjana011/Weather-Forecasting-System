@@ -4,91 +4,71 @@
 
 #define API_KEY "YOUR_API_KEY"
 
-int main(void) {
-  CURL *curl;
-  CURLcode res;
-  char *response_buffer;
-  size_t response_size;
-
-  /* Initialize the curl session */
-  curl = curl_easy_init();
-  if (curl == NULL) {
-    fprintf(stderr, "Failed to initialize curl\n");
+int main(int argc, char argv[]) {
+  // Check the number of arguments
+  if (argc != 2) {
+    printf("Usage: %s <city>\n", argv[0]);
     return 1;
   }
 
-  /* Set the API key */
-  curl_easy_setopt(curl, CURLOPT_APIKEY, API_KEY);
+  // Get the city name
+  charcity = argv[1];
 
-  /* Set the URL */
-  curl_easy_setopt(curl, CURLOPT_URL, "https://api.openweathermap.org/data/2.5/weather?q=London,uk");
+  // Create a CURL handle
+  CURL curl = curl_easy_init();
 
-  /* Set the response type */
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_response);
+  // Set the API URL
+  curl_easy_setopt(curl, CURLOPT_URL, "https://api.openweathermap.org/data/2.5/weather?q=%s&appid=%s", city, API_KEY);
 
-  /* Perform the request */
-  res = curl_easy_perform(curl);
+  // Set the HTTP method
+  curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
+
+  // Set the response type
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, "Content-Type: application/json");
+
+  // Execute the request
+  CURLcode res = curl_easy_perform(curl);
+
+  // Check the response code
   if (res != CURLE_OK) {
-    fprintf(stderr, "Failed to perform request: %s\n", curl_easy_strerror(res));
+    fprintf(stderr, "Error: %s\n", curl_easy_strerror(res));
     return 1;
   }
 
-  /* Get the response size */
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_SIZE, &response_size);
+  // Get the response data
+  charresponse_data = curl_easy_getinfo(curl, CURLINFO_RESPONSE_DATA);
 
-  /* Allocate memory for the response buffer */
-  response_buffer = malloc(response_size);
-  if (response_buffer == NULL) {
-    fprintf(stderr, "Failed to allocate memory for response buffer\n");
-    return 1;
-  }
+  // Parse the JSON data
+  struct weather_data {
+    char city;
+    float temperature;
+    float humidity;
+    float pressure;
+  } weather_data;
 
-  /* Read the response into the buffer */
-  res = curl_easy_read(curl, response_buffer, response_size);
-  if (res != CURLE_OK) {
-    fprintf(stderr, "Failed to read response: %s\n", curl_easy_strerror(res));
-    return 1;
-  }
+  json_objectroot = json_tokener_parse(response_data);
+  json_object main = json_object_object_get(root, "main");
+  json_objectweather = json_object_object_get(root, "weather");
 
-  /* Close the curl session */
+  weather_data.city = json_object_get_string(main, "name");
+  weather_data.temperature = json_object_get_float(main, "temp");
+  weather_data.humidity = json_object_get_float(main, "humidity");
+  weather_data.pressure = json_object_get_float(main, "pressure");
+
+  // Free the JSON data
+  json_object_put(root);
+
+  // Print the weather data
+  printf("City: %s\n", weather_data.city);
+  printf("Temperature: %.2f°C\n", weather_data.temperature);
+  printf("Humidity: %.2f%%\n", weather_data.humidity);
+  printf("Pressure: %.2f hPa\n", weather_data.pressure);
+
+  // Free the response data
+  free(response_data);
+
+  // Close the CURL handle
   curl_easy_cleanup(curl);
 
-  /* Parse the JSON response */
-  struct weather_data {
-    char *city;
-    int temperature;
-    char *description;
-  };
-
-  struct weather_data data;
-  json_object *root = json_parse(response_buffer);
-  if (root == NULL) {
-    fprintf(stderr, "Failed to parse JSON response\n");
-    return 1;
-  }
-
-  data.city = json_object_get_string(root, "name");
-  data.temperature = json_object_get_int(root, "main.temp");
-  data.description = json_object_get_string(root, "weather[0].description");
-
-  /* Display the weather data */
-  printf("City: %s\n", data.city);
-  printf("Temperature: %d°C\n", data.temperature);
-  printf("Description: %s\n", data.description);
-
-  /* Free the memory allocated for the response buffer */
-  free(response_buffer);
-
   return 0;
-}
-
-/* Writes the response data to the specified buffer */
-size_t write_response(void *ptr, size_t size, size_t nmemb, void *stream) {
-  size_t written = size * nmemb;
-  char *buffer = (char *)stream;
-
-  /* Write the response data to the buffer */
-  memcpy(buffer, ptr, written);
-
-  return written;
 }
